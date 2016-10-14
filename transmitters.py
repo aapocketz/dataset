@@ -8,12 +8,17 @@ sps = 8
 ebw = 0.35
 
 class transmitter_mapper(gr.hier_block2):
-    def __init__(self, modtype, symvals, txname, samples_per_symbol=2, excess_bw=0.35):
+    def __init__(self, modtype, symvals, txname, samples_per_symbol=2, excess_bw = 0.35):
         gr.hier_block2.__init__(self, txname,
             gr.io_signature(1, 1, gr.sizeof_char),
             gr.io_signature(1, 1, gr.sizeof_gr_complex))
         self.mod = mapper.mapper(modtype, symvals)
         # pulse shaping filter
+        self.set_parameters(samples_per_symbol, excess_bw)
+        #self.rate = const.bits_per_symbol()
+
+    def set_parameters(self, samples_per_symbol, excess_bw):
+        self.disconnect_all()
         nfilts = 32
         ntaps = nfilts * 11 * int(samples_per_symbol)    # make nfilts filters of ntaps each
         rrc_taps = filter.firdes.root_raised_cosine(
@@ -24,7 +29,6 @@ class transmitter_mapper(gr.hier_block2):
             ntaps)
         self.rrc_filter = filter.pfb_arb_resampler_ccf(samples_per_symbol, rrc_taps)
         self.connect(self, self.mod, self.rrc_filter, self)
-        #self.rate = const.bits_per_symbol()
 
 class transmitter_bpsk(transmitter_mapper):
     modname = "BPSK"
@@ -76,8 +80,12 @@ class transmitter_gfsk(gr.hier_block2):
             gr.io_signature(1, 1, gr.sizeof_char),
             gr.io_signature(1, 1, gr.sizeof_gr_complex))
         self.repack = blocks.unpacked_to_packed_bb(1, gr.GR_MSB_FIRST)
-        self.mod = digital.gfsk_mod(sps, sensitivity=0.1, bt=ebw)
-        self.connect( self, self.repack, self.mod, self )
+        self.set_parameters(sps, ebw)
+
+    def set_parameters(self, samples_per_symbol, excess_bw):
+        self.disconnect_all()
+        self.mod = digital.gfsk_mod(samples_per_symbol, sensitivity=0.1, bt=excess_bw)
+        self.connect(self, self.repack, self.mod, self)
 
 class transmitter_cpfsk(gr.hier_block2):
     modname = "CPFSK"
@@ -85,7 +93,11 @@ class transmitter_cpfsk(gr.hier_block2):
         gr.hier_block2.__init__(self, "transmitter_cpfsk",
             gr.io_signature(1, 1, gr.sizeof_char),
             gr.io_signature(1, 1, gr.sizeof_gr_complex))
-        self.mod = analog.cpfsk_bc(0.5, 1.0, sps)
+        self.set_parameters(sps, ebw)
+
+    def set_parameters(self, samples_per_symbol, excess_bw):
+        self.disconnect_all()
+        self.mod = analog.cpfsk_bc(0.5, 1.0, samples_per_symbol)
         self.connect( self, self.mod, self )
 
 class transmitter_fm(gr.hier_block2):
@@ -97,6 +109,9 @@ class transmitter_fm(gr.hier_block2):
         self.mod = analog.wfm_tx( audio_rate=44100.0, quad_rate=220.5e3 )
         self.connect( self, self.mod, self )
         self.rate = 200e3/44.1e3
+
+    def set_parameters(self, samples_per_symbol, excess_bw):
+        pass
 
 class transmitter_am(gr.hier_block2):
     modname = "AM-DSB"
@@ -115,6 +130,10 @@ class transmitter_am(gr.hier_block2):
         self.mod = blocks.multiply_cc()
         self.connect( self, self.interp, self.cnv, self.mul, self.add, self.mod, self )
         self.connect( self.src, (self.mod,1) )
+
+    def set_parameters(self, samples_per_symbol, excess_bw):
+        pass
+
 
 class transmitter_amssb(gr.hier_block2):
     modname = "AM-SSB"
@@ -135,6 +154,10 @@ class transmitter_amssb(gr.hier_block2):
         self.filt = filter.hilbert_fc(401)
         self.connect( self, self.interp, self.mul, self.add, self.mod, self.filt, self )
         self.connect( self.src, (self.mod,1) )
+
+
+    def set_parameters(self, samples_per_symbol, excess_bw):
+        pass
 
 
 transmitters = {
